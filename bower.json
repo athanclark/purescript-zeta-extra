@@ -12,10 +12,10 @@
     "url": "git://github.com/athanclark/purescript-zeta-extra.git"
   },
   "dependencies": {
-    "purescript-prelude": "^4.1.0",
+    "purescript-prelude": "^4.1.1",
     "purescript-effect": "^2.0.1",
-    "purescript-zeta": "^5.0.0",
-    "purescript-web-html": "^2.0.0",
+    "purescript-zeta": "^5.0.2",
+    "purescript-web-html": "^2.3.0",
     "purescript-js-timers": "^4.0.1"
   },
   "devDependencies": {
