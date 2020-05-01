@@ -9,12 +9,10 @@
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "git://github.com/athanclark/purescript-zeta-extra.git"
+    "url": "https://github.com/athanclark/purescript-zeta-extra.git"
   },
   "dependencies": {
-    "purescript-prelude": "^4.1.1",
-    "purescript-effect": "^2.0.1",
-    "purescript-zeta": "^5.0.2",
+    "purescript-zeta": "^6.0.0",
     "purescript-web-html": "^2.3.0",
     "purescript-js-timers": "^4.0.1"
   },

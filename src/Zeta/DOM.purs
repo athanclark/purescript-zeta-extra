@@ -1,8 +1,8 @@
-module Signal.DOM where
+module Zeta.DOM where
 
-import Signal.Types (READ, WRITE)
-import Signal (Signal, make, set)
-import Signal.Compat (map')
+import Zeta.Types (READ, WRITE)
+import Zeta (Signal, make, set)
+import Zeta.Compat (map')
 
 import Prelude (bind, pure, (=<<), (<$>), discard, map, void, (<*>), (-), (+), when, (==))
 import Data.Tuple (Tuple (..))
