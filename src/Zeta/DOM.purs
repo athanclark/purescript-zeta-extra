@@ -17,13 +17,13 @@ import Effect.Exception (throw)
 import Effect.Now (now)
 
 import Web.HTML (window)
-import Web.HTML.Window (document, requestAnimationFrame, innerWidth, innerHeight)
+import Web.HTML.Window (document, requestAnimationFrame, innerWidth, innerHeight, RequestAnimationFrameId)
 import Web.HTML.Window as Window
 import Web.HTML.HTMLDocument (body)
 import Web.HTML.HTMLDocument (toDocument) as HTMLDocument
 import Web.HTML.HTMLElement (toElement) as HTMLElement
 import Web.Event.Event (EventType (..))
-import Web.Event.EventTarget (addEventListener, eventListener)
+import Web.Event.EventTarget (addEventListener, eventListener, EventListener)
 import Web.DOM.Element (scrollLeft, scrollTop)
 import Web.DOM.Document (documentElement)
 import Unsafe.Coerce (unsafeCoerce)
@@ -31,27 +31,35 @@ import Unsafe.Coerce (unsafeCoerce)
 
 
 keyPressed :: Int
-           -> Effect (Signal (read :: READ, write :: WRITE) Boolean)
+           -> Effect
+                { signal :: Signal (read :: READ, write :: WRITE) Boolean
+                , keydownListener :: EventListener
+                , keyupListener :: EventListener
+                }
 keyPressed k = do
   w <- window
-  out <- make false
-  l1 <- eventListener (\event -> when ((unsafeCoerce event).keyCode == k) (set true out))
-  addEventListener (EventType "keydown") l1 false (Window.toEventTarget w)
-  l2 <- eventListener (\event -> when ((unsafeCoerce event).keyCode == k) (set false out))
-  addEventListener (EventType "keyup") l2 false (Window.toEventTarget w)
-  pure out
+  signal <- make false
+  keydownListener <- eventListener (\event -> when ((unsafeCoerce event).keyCode == k) (set true signal))
+  addEventListener (EventType "keydown") keydownListener false (Window.toEventTarget w)
+  keyupListener <- eventListener (\event -> when ((unsafeCoerce event).keyCode == k) (set false signal))
+  addEventListener (EventType "keyup") keyupListener false (Window.toEventTarget w)
+  pure {signal,keydownListener,keyupListener}
 
 
 mouseButton :: Int
-            -> Effect (Signal (read :: READ, write :: WRITE) Boolean)
+            -> Effect
+                { signal :: Signal (read :: READ, write :: WRITE) Boolean
+                , mousedownListener :: EventListener
+                , mouseupListener :: EventListener
+                }
 mouseButton m = do
   w <- window
-  out <- make false
-  l1 <- eventListener (\event -> when ((unsafeCoerce event).button == m) (set true out))
-  addEventListener (EventType "mousedown") l1 false (Window.toEventTarget w)
-  l2 <- eventListener (\event -> when ((unsafeCoerce event).button == m) (set false out))
-  addEventListener (EventType "mouseup") l2 false (Window.toEventTarget w)
-  pure out
+  signal <- make false
+  mousedownListener <- eventListener (\event -> when ((unsafeCoerce event).button == m) (set true signal))
+  addEventListener (EventType "mousedown") mousedownListener false (Window.toEventTarget w)
+  mouseupListener <- eventListener (\event -> when ((unsafeCoerce event).button == m) (set false signal))
+  addEventListener (EventType "mouseup") mouseupListener false (Window.toEventTarget w)
+  pure {signal,mousedownListener,mouseupListener}
 
 
 type Touch =
@@ -69,36 +77,37 @@ type Touch =
   }
 
 
-touch :: Effect (Signal (read :: READ, write :: WRITE) (Array Touch))
+touch :: Effect {signal :: Signal (read :: READ, write :: WRITE) (Array Touch), touchListener :: EventListener}
 touch = do
-  out <- make []
+  signal <- make []
   let report event = do
         let l = (unsafeCoerce event).touches.length
             xs = map (\i -> (unsafeCoerce event).touches.item i) (0 .. (l-1))
-        set xs out
+        set xs signal
   w <- window
-  l <- eventListener report
-  addEventListener (EventType "touchstart")  l false (Window.toEventTarget w)
-  addEventListener (EventType "touchend")    l false (Window.toEventTarget w)
-  addEventListener (EventType "touchmove")   l false (Window.toEventTarget w)
-  addEventListener (EventType "touchcancel") l false (Window.toEventTarget w)
-  pure out
+  touchListener <- eventListener report
+  addEventListener (EventType "touchstart")  touchListener false (Window.toEventTarget w)
+  addEventListener (EventType "touchend")    touchListener false (Window.toEventTarget w)
+  addEventListener (EventType "touchmove")   touchListener false (Window.toEventTarget w)
+  addEventListener (EventType "touchcancel") touchListener false (Window.toEventTarget w)
+  pure {signal,touchListener}
 
 
-tap :: Effect (Signal (read :: READ, write :: WRITE) Boolean)
+tap :: Effect {signal :: Signal (read :: READ, write :: WRITE) Boolean, touchListener :: EventListener}
 tap = do
-  touches <- touch
-  map' (\t -> Array.null t) touches
+  {signal,touchListener} <- touch
+  signal' <- map' (\t -> Array.null t) signal
+  pure {signal:signal',touchListener}
 
 
-mousePos :: Effect (Signal (read :: READ, write :: WRITE) {x :: Int, y :: Int})
+mousePos :: Effect {signal :: Signal (read :: READ, write :: WRITE) {x :: Int, y :: Int}, mousemoveListener :: EventListener}
 mousePos = do
-  out <- make {x: 0, y: 0}
+  signal <- make {x: 0, y: 0}
   w <- window
   let go event = do
         let e = unsafeCoerce event
         case Tuple <$> Object.lookup "pageX" e <*> Object.lookup "pageY" e of
-          Just (Tuple x y) -> set {x,y} out
+          Just (Tuple x y) -> set {x,y} signal
           Nothing -> case Tuple <$> Object.lookup "clientX" e <*> Object.lookup "clientY" e of
             Just (Tuple x y) -> do
               d <- document w
@@ -113,33 +122,33 @@ mousePos = do
                   dt <- scrollTop d'
                   set { x: round (toNumber x + bl + dl)
                       , y: round (toNumber y + bt + dt)
-                      } out
+                      } signal
             Nothing -> throw "Mouse position not recognized!"
-  l <- eventListener go
-  addEventListener (EventType "mousemove") l false (Window.toEventTarget w)
-  pure out
+  mousemoveListener <- eventListener go
+  addEventListener (EventType "mousemove") mousemoveListener false (Window.toEventTarget w)
+  pure {signal,mousemoveListener}
 
 
-animationFrame :: Effect (Signal (read :: READ, write :: WRITE) Instant)
+animationFrame :: Effect {signal :: Signal (read :: READ, write :: WRITE) Instant, id :: RequestAnimationFrameId}
 animationFrame = do
   w <- window
-  out <- make =<< now
+  signal <- make =<< now
   let go = do
         t <- now
-        set t out
+        set t signal
         void (requestAnimationFrame go w)
-  _ <- requestAnimationFrame go w
-  pure out
+  id <- requestAnimationFrame go w
+  pure {signal,id}
 
 
-windowDimensions :: Effect (Signal (read :: READ, write :: WRITE) {w :: Int, h :: Int})
+windowDimensions :: Effect {signal :: Signal (read :: READ, write :: WRITE) {w :: Int, h :: Int}, resizeListener :: EventListener}
 windowDimensions = do
   win <- window
-  out <- make =<< ((\w h -> {w,h}) <$> innerWidth win <*> innerHeight win)
+  signal <- make =<< ((\w h -> {w,h}) <$> innerWidth win <*> innerHeight win)
   let go event = do
         w <- innerWidth win
         h <- innerHeight win
-        set {w,h} out
-  l <- eventListener go
-  addEventListener (EventType "resize") l false (Window.toEventTarget win)
-  pure out
+        set {w,h} signal
+  resizeListener <- eventListener go
+  addEventListener (EventType "resize") resizeListener false (Window.toEventTarget win)
+  pure {signal,resizeListener}
